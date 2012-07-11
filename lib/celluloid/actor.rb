@@ -58,16 +58,23 @@ module Celluloid
           raise DeadActorError, "attempted to call a dead actor"
         end
 
-        if Celluloid.actor? and not Celluloid.exclusive?
-          # The current task will be automatically resumed when we get a response
-          Task.suspend(:callwait).value
-        else
-          # Otherwise we're inside a normal thread, so block
-          response = Thread.mailbox.receive do |msg|
-            msg.respond_to?(:call) and msg.call == call
+        loop do
+          msg = if Celluloid.actor? and not Celluloid.exclusive?
+            # The current task will be automatically resumed when we get a response
+            Task.suspend(:callwait)
+          else
+            # Otherwise we're inside a normal thread, so block
+            response = Thread.mailbox.receive do |msg|
+              msg.respond_to?(:call) and msg.call == call
+            end
           end
 
-          response.value
+          if msg.is_a?(InvokeBlock)
+            result = block.call(*msg.arguments)
+            mailbox << BlockResponse.new(call, result)
+          else
+            return msg.value
+          end
         end
       end
 
@@ -201,14 +208,14 @@ module Celluloid
     # Schedule a block to run at the given time
     def after(interval)
       @timers.add(interval) do
-        Task.new(:timer) { yield }.resume
+        yield
       end
     end
 
     # Schedule a block to run at the given time
     def every(interval)
       @timers.add(interval, true) do
-        Task.new(:timer) { yield }.resume
+        yield
       end
     end
 
@@ -232,7 +239,7 @@ module Celluloid
         else
           Task.new(:message_handler) { message.dispatch(@subject) }.resume
         end
-      when Response
+      when InvokeBlock, BlockResponse, Response
         message.dispatch
       else
         @receivers.handle_message(message)
