@@ -15,9 +15,11 @@ module Celluloid
 
       @worker_class = worker_class
       @idle = @size.times.map { worker_class.new_link(*@args) }
+      @initialized = true
     end
 
     def _send_(method, *args, &block)
+      raise "Pool not yet initialized" unless @initialized
       worker = __provision_worker
 
       begin
@@ -50,7 +52,11 @@ module Celluloid
     end
 
     def inspect
-      _send_ :inspect
+      if @initialized
+        _send_ :inspect
+      else
+        "#<#{self.class}:#{object_id.to_s(16)} @class=#{self.class.inspect} @size=#{@size.inspect}>"
+      end
     end
 
     # Provision a new worker

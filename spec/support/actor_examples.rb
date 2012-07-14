@@ -148,7 +148,8 @@ shared_context "a Celluloid Actor" do |included_module|
     actor = actor_class.new "Troy McClure"
     actor.run do
       Celluloid.actor?
-    end.should be_true
+    end.should be_false
+    actor.should be_actor
   end
 
   it "inspects properly" do
@@ -482,6 +483,22 @@ shared_context "a Celluloid Actor" do |included_module|
 
       sleep(interval + Q) # wonky! #/
       actor.should_not be_fired
+    end
+
+    it "allows delays from outside the actor" do
+      actor = @klass.new
+
+      interval = Celluloid::Timer::QUANTUM * 10
+      started_at = Time.now
+      fired = false
+
+      timer = actor.after(interval) do
+        fired = true
+      end
+      fired.should be_false
+
+      sleep(interval + Celluloid::Timer::QUANTUM) # wonky! #/
+      fired.should be_true
     end
   end
 

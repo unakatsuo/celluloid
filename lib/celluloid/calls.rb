@@ -35,6 +35,29 @@ module Celluloid
     end
   end
 
+  class InvokeBlock
+    def initialize(call, arguments)
+      @call = call
+      @arguments = arguments
+    end
+    attr_reader :call, :arguments
+
+    def dispatch
+      @call.task.resume self
+    end
+  end
+
+  class BlockResponse
+    def initialize(call, result)
+      @call = call
+      @result = result
+    end
+
+    def dispatch
+      @call.resume(@result)
+    end
+  end
+
   # Synchronous calls wait for a response
   class SyncCall < Call
     attr_reader :caller, :task
@@ -43,6 +66,10 @@ module Celluloid
       super(method, arguments, block)
       @caller = caller
       @task = task
+    end
+
+    def resume(value = nil)
+      @current_task.resume(value)
     end
 
     def dispatch(obj)
@@ -54,7 +81,22 @@ module Celluloid
       end
 
       begin
-        result = obj.send @method, *@arguments, &@block
+        block = nil
+        if @block
+          block = lambda do |*values|
+            if Fiber.current.task
+              @current_task = Fiber.current.task
+              respond InvokeBlock.new(self, values)
+              # TODO: if respond fails, the Task will never be resumed
+              Task.suspend(:invokeblock)
+            else
+              # TODO: this is calling the block "dangerously" in some random thread
+              # usually this is inside Actor#receive or similar
+              @block.call(*values)
+            end
+          end
+        end
+        result = obj.send @method, *@arguments, &block
       rescue Exception => exception
         # Exceptions that occur during synchronous calls are reraised in the
         # context of the caller

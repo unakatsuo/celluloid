@@ -105,8 +105,10 @@ module Celluloid
         raise UnattachedError, "can't delay unless attached" unless @actor
         @delayed_transition.cancel if @delayed_transition
 
+        # XXX: Actor#after requires that the block be executed in the called actor scope
         @delayed_transition = @actor.after(options[:delay]) do
           transition! new_state.name
+          # XXX: is self ok?
           new_state.call(self)
         end
 
@@ -119,6 +121,7 @@ module Celluloid
       end
 
       transition! new_state.name
+      # XXX: is self ok?
       new_state.call(self)
     end
 
