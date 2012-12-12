@@ -12,12 +12,12 @@ module Celluloid
 
       # Start this application (and watch it with a supervisor)
       def run!
-        group = new do |_group|
+        group_new = new do |group|
           blocks.each do |block|
-            block.call(_group)
+            block.call(group)
           end
         end
-        group
+        group_new
       end
 
       # Run the application in the foreground with a simple watchdog
@@ -93,12 +93,12 @@ module Celluloid
 
     # Restart a crashed actor
     def restart_actor(actor, reason)
-      member = @members.find do |_member|
-        _member.actor == actor
+      member_found = @members.find do |member|
+        member.actor == actor
       end
-      raise "a group member went missing. This shouldn't be!" unless member
+      raise "a group member went missing. This shouldn't be!" unless member_found
 
-      member.restart(reason)
+      member_found.restart(reason)
     end
 
     # A member of the group
